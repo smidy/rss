@@ -22,7 +22,7 @@ dotnet run -- <command>
 ```bash
 cd rss/rss
 dotnet pack
-dotnet tool install -g --add-source ./bin/Debug rss
+dotnet tool install -g --add-source ./bin/Release rss
 ```
 
 Then use `rss` from anywhere.
@@ -59,7 +59,7 @@ rss fetch
 | `rss add <url>` | Add a feed URL to the config |
 | `rss remove <url>` | Remove a feed URL from the config |
 | `rss list` | List all configured feed URLs |
-| `rss fetch [urls...]` | Fetch and summarize articles |
+| `rss fetch [urls...] [--limit N] [--offset N] [--format rich\|markdown]` | Fetch and summarize articles |
 | `rss config set endpoint <value>` | Set the LLM API endpoint |
 | `rss config set model <value>` | Set the model identifier |
 | `rss config set apiKey <value>` | Set the API key (default: `lm-studio`) |
@@ -72,6 +72,41 @@ Pass URLs directly to `fetch` without adding them to the config:
 ```bash
 rss fetch https://hnrss.org/frontpage
 ```
+
+### Limit and offset
+
+Control how many articles are processed per feed:
+
+```bash
+rss fetch --limit 5            # first 5 articles
+rss fetch --offset 10          # skip the first 10
+rss fetch --limit 5 --offset 10  # articles 11–15
+```
+
+### Markdown output
+
+Use `--format markdown` to get clean markdown on stdout — useful for piping to files or agents:
+
+```bash
+rss fetch --format markdown
+rss fetch --format markdown > summary.md
+rss fetch --format markdown --limit 3 | my-agent
+```
+
+Output structure:
+
+```markdown
+# Feed Title
+
+## Article Title
+*2026-04-07 09:39*
+
+Summary text here...
+
+---
+```
+
+The default `--format rich` renders with Spectre.Console formatting for terminal viewing.
 
 ## Configuration
 

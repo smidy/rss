@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>rss</AssemblyName>
+    <PackageId>rss</PackageId>
+    <Version>1.0.0</Version>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>rss</ToolCommandName>
   </PropertyGroup>

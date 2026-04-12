@@ -15,11 +15,19 @@ public static class FetchCommand
             Arity = ArgumentArity.ZeroOrMore,
         };
 
-        var cmd = new Command("fetch", "Fetch feeds and summarize articles via LLM") { urlsArg };
+        var limitOpt = new Option<int?>("--limit") { Description = "Max number of articles to process per feed" };
+        var offsetOpt = new Option<int>("--offset") { Description = "Number of articles to skip per feed" };
+        var formatOpt = new Option<string>("--format") { Description = "Output format: rich (default) or markdown" };
+
+        var cmd = new Command("fetch", "Fetch feeds and summarize articles via LLM") { urlsArg, limitOpt, offsetOpt, formatOpt };
 
         cmd.SetAction(async (parseResult, cancellationToken) =>
         {
             var urls = parseResult.GetValue(urlsArg) ?? [];
+            var limit = parseResult.GetValue(limitOpt);
+            var offset = parseResult.GetValue(offsetOpt);
+            var format = parseResult.GetValue(formatOpt) ?? "rich";
+            var markdown = format.Equals("markdown", StringComparison.OrdinalIgnoreCase);
             var config = configService.Load();
             var llmService = new LlmService(config.Llm);
 
@@ -33,32 +41,62 @@ public static class FetchCommand
 
             foreach (var feedUrl in feedUrls)
             {
-                AnsiConsole.MarkupLine("\n[bold blue]Fetching:[/] {0}", feedUrl);
-
                 (string feedTitle, var entries) = await feedService.ReadAsync(feedUrl);
 
-                AnsiConsole.MarkupLine("[bold]{0}[/] — {1} article(s)", Markup.Escape(feedTitle), entries.Count);
+                var page = entries.Skip(offset);
+                if (limit.HasValue) page = page.Take(limit.Value);
+                var selected = page.ToList();
 
-                foreach (var entry in entries)
+                if (markdown)
                 {
-                    AnsiConsole.MarkupLine("\n  [bold yellow]{0}[/]", Markup.Escape(entry.Title));
-                    if (entry.Published.HasValue)
-                        AnsiConsole.MarkupLine("  [grey]{0}[/]", entry.Published.Value.ToString("yyyy-MM-dd HH:mm"));
+                    Console.WriteLine($"# {feedTitle}");
+                    Console.WriteLine();
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine("\n[bold blue]Fetching:[/] {0}", feedUrl);
+                    AnsiConsole.MarkupLine("[bold]{0}[/] — {1} article(s)", Markup.Escape(feedTitle), selected.Count);
+                }
 
+                foreach (var entry in selected)
+                {
                     string summary = string.Empty;
-                    await AnsiConsole.Status()
-                        .Spinner(Spinner.Known.Dots)
-                        .StartAsync("Fetching article...", async ctx =>
-                        {
-                            var text = await articleService.FetchTextAsync(entry.Url);
-                            ctx.Status("Summarizing...");
-                            summary = await llmService.SummarizeAsync(entry.Title, text);
-                        });
 
-                    AnsiConsole.Write(new Panel(summary)
-                        .Header("[green]Summary[/]")
-                        .Expand()
-                        .BorderColor(Color.Grey));
+                    if (markdown)
+                    {
+                        // No spinner — stdout must stay clean for piping
+                        var text = await articleService.FetchTextAsync(entry.Url);
+                        summary = await llmService.SummarizeAsync(entry.Title, text);
+
+                        Console.WriteLine($"## {entry.Title}");
+                        if (entry.Published.HasValue)
+                            Console.WriteLine($"*{entry.Published.Value:yyyy-MM-dd HH:mm}*");
+                        Console.WriteLine();
+                        Console.WriteLine(summary);
+                        Console.WriteLine();
+                        Console.WriteLine("---");
+                        Console.WriteLine();
+                    }
+                    else
+                    {
+                        AnsiConsole.MarkupLine("\n  [bold yellow]{0}[/]", Markup.Escape(entry.Title));
+                        if (entry.Published.HasValue)
+                            AnsiConsole.MarkupLine("  [grey]{0}[/]", entry.Published.Value.ToString("yyyy-MM-dd HH:mm"));
+
+                        await AnsiConsole.Status()
+                            .Spinner(Spinner.Known.Dots)
+                            .StartAsync("Fetching article...", async ctx =>
+                            {
+                                var text = await articleService.FetchTextAsync(entry.Url);
+                                ctx.Status("Summarizing...");
+                                summary = await llmService.SummarizeAsync(entry.Title, text);
+                            });
+
+                        AnsiConsole.Write(new Panel(Markup.Escape(summary))
+                            .Header("[green]Summary[/]")
+                            .Expand()
+                            .BorderColor(Color.Grey));
+                    }
                 }
             }
         });
