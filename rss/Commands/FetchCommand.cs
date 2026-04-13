@@ -18,8 +18,9 @@ public static class FetchCommand
         var limitOpt = new Option<int?>("--limit") { Description = "Max number of articles to process per feed" };
         var offsetOpt = new Option<int>("--offset") { Description = "Number of articles to skip per feed" };
         var formatOpt = new Option<string>("--format") { Description = "Output format: rich (default) or markdown" };
+        var maxWordsOpt = new Option<int?>("--max-words") { Description = "Max words in each summary (overrides config; 0 = unlimited)" };
 
-        var cmd = new Command("fetch", "Fetch feeds and summarize articles via LLM") { urlsArg, limitOpt, offsetOpt, formatOpt };
+        var cmd = new Command("fetch", "Fetch feeds and summarize articles via LLM") { urlsArg, limitOpt, offsetOpt, formatOpt, maxWordsOpt };
 
         cmd.SetAction(async (parseResult, cancellationToken) =>
         {
@@ -27,6 +28,7 @@ public static class FetchCommand
             var limit = parseResult.GetValue(limitOpt);
             var offset = parseResult.GetValue(offsetOpt);
             var format = parseResult.GetValue(formatOpt) ?? "rich";
+            var maxWords = parseResult.GetValue(maxWordsOpt) ?? 0;
             var markdown = format.Equals("markdown", StringComparison.OrdinalIgnoreCase);
             var config = configService.Load();
             var llmService = new LlmService(config.Llm);
@@ -69,12 +71,12 @@ public static class FetchCommand
                         if (isImage)
                         {
                             var (imageBytes, imageMediaType) = await ImageService.FetchAndPrepareAsync(entry.Url);
-                            summary = await llmService.SummarizeAsync(entry.Title, string.Empty, imageBytes, imageMediaType);
+                            summary = await llmService.SummarizeAsync(entry.Title, string.Empty, imageBytes, imageMediaType, maxWords);
                         }
                         else
                         {
                             var text = await articleService.FetchTextAsync(entry.Url);
-                            summary = await llmService.SummarizeAsync(entry.Title, text);
+                            summary = await llmService.SummarizeAsync(entry.Title, text, maxWords: maxWords);
                         }
 
                         Console.WriteLine($"## [{entry.Title}]({entry.Url})");
@@ -101,13 +103,13 @@ public static class FetchCommand
                                 {
                                     var (imageBytes, imageMediaType) = await ImageService.FetchAndPrepareAsync(entry.Url);
                                     ctx.Status("Summarizing...");
-                                    summary = await llmService.SummarizeAsync(entry.Title, string.Empty, imageBytes, imageMediaType);
+                                    summary = await llmService.SummarizeAsync(entry.Title, string.Empty, imageBytes, imageMediaType, maxWords);
                                 }
                                 else
                                 {
                                     var text = await articleService.FetchTextAsync(entry.Url);
                                     ctx.Status("Summarizing...");
-                                    summary = await llmService.SummarizeAsync(entry.Title, text);
+                                    summary = await llmService.SummarizeAsync(entry.Title, text, maxWords: maxWords);
                                 }
                             });
 

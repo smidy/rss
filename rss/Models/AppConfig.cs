@@ -11,4 +11,5 @@ public class LlmConfig
     public string Endpoint { get; set; } = "http://localhost:1234/v1";
     public string Model { get; set; } = "model-identifier";
     public string ApiKey { get; set; } = "lm-studio";
+    public int MaxSummaryWords { get; set; } = 0;
 }

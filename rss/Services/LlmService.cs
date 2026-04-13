@@ -19,10 +19,16 @@ public class LlmService
     }
 
     public async Task<string> SummarizeAsync(string title, string articleText,
-        byte[]? imageBytes = null, string? imageMediaType = null)
+        byte[]? imageBytes = null, string? imageMediaType = null, int maxWords = 0)
     {
         if (string.IsNullOrWhiteSpace(articleText) && imageBytes is null)
             return "(no article text or image could be retrieved)";
+
+        var effectiveMaxWords = maxWords > 0 ? maxWords : _config.MaxSummaryWords;
+        var wordLimit = effectiveMaxWords > 0
+            ? $" Limit your response to {effectiveMaxWords} words."
+            : string.Empty;
+        var systemPrompt = SystemPrompt + wordLimit;
 
         var client = new OpenAIClient(
             new ApiKeyCredential(_config.ApiKey),
@@ -43,7 +49,7 @@ public class LlmService
 
         var messages = new List<ChatMessage>
         {
-            new SystemChatMessage(SystemPrompt),
+            new SystemChatMessage(systemPrompt),
             userMessage,
         };
 

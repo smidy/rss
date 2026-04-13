@@ -8,7 +8,7 @@ public static class ConfigCommand
 {
     public static Command Build(ConfigService configService)
     {
-        var keyArg = new Argument<string>("key") { Description = "Setting key: endpoint | model | apiKey" };
+        var keyArg = new Argument<string>("key") { Description = "Setting key: endpoint | model | apiKey | maxSummaryWords" };
         var valueArg = new Argument<string>("value") { Description = "New value" };
         var setCmd = new Command("set", "Update an LLM setting") { keyArg, valueArg };
 
@@ -28,8 +28,16 @@ public static class ConfigCommand
                 case "apikey":
                     config.Llm.ApiKey = value;
                     break;
+                case "maxsummarywords":
+                    if (!int.TryParse(value, out var words) || words < 0)
+                    {
+                        AnsiConsole.MarkupLine("[red]maxSummaryWords must be a non-negative integer (0 = unlimited)[/]");
+                        return;
+                    }
+                    config.Llm.MaxSummaryWords = words;
+                    break;
                 default:
-                    AnsiConsole.MarkupLine("[red]Unknown key:[/] {0}. Valid keys: endpoint, model, apiKey", key);
+                    AnsiConsole.MarkupLine("[red]Unknown key:[/] {0}. Valid keys: endpoint, model, apiKey, maxSummaryWords", key);
                     return;
             }
             configService.Save(config);
@@ -44,6 +52,7 @@ public static class ConfigCommand
             table.AddRow("endpoint", config.Llm.Endpoint);
             table.AddRow("model", config.Llm.Model);
             table.AddRow("apiKey", config.Llm.ApiKey);
+            table.AddRow("maxSummaryWords", config.Llm.MaxSummaryWords == 0 ? "unlimited" : config.Llm.MaxSummaryWords.ToString());
             AnsiConsole.Write(table);
         });
 
