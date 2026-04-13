@@ -18,10 +18,11 @@ public class LlmService
         _config = config;
     }
 
-    public async Task<string> SummarizeAsync(string title, string articleText)
+    public async Task<string> SummarizeAsync(string title, string articleText,
+        byte[]? imageBytes = null, string? imageMediaType = null)
     {
-        if (string.IsNullOrWhiteSpace(articleText))
-            return "(no article text could be retrieved)";
+        if (string.IsNullOrWhiteSpace(articleText) && imageBytes is null)
+            return "(no article text or image could be retrieved)";
 
         var client = new OpenAIClient(
             new ApiKeyCredential(_config.ApiKey),
@@ -29,10 +30,21 @@ public class LlmService
 
         var chat = client.GetChatClient(_config.Model);
 
+        ChatMessageContentPart textPart = ChatMessageContentPart.CreateTextPart(
+            $"Title: {title}\n\n{articleText}");
+
+        UserChatMessage userMessage = imageBytes is not null
+            ? new UserChatMessage(
+                textPart,
+                ChatMessageContentPart.CreateImagePart(
+                    BinaryData.FromBytes(imageBytes),
+                    imageMediaType ?? "image/jpeg"))
+            : new UserChatMessage(textPart);
+
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(SystemPrompt),
-            new UserChatMessage($"Title: {title}\n\n{articleText}"),
+            userMessage,
         };
 
         var response = await chat.CompleteChatAsync(messages);

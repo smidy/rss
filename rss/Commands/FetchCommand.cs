@@ -61,14 +61,23 @@ public static class FetchCommand
                 foreach (var entry in selected)
                 {
                     string summary = string.Empty;
+                    var isImage = ImageService.IsImageUrl(entry.Url);
 
                     if (markdown)
                     {
                         // No spinner — stdout must stay clean for piping
-                        var text = await articleService.FetchTextAsync(entry.Url);
-                        summary = await llmService.SummarizeAsync(entry.Title, text);
+                        if (isImage)
+                        {
+                            var (imageBytes, imageMediaType) = await ImageService.FetchAndPrepareAsync(entry.Url);
+                            summary = await llmService.SummarizeAsync(entry.Title, string.Empty, imageBytes, imageMediaType);
+                        }
+                        else
+                        {
+                            var text = await articleService.FetchTextAsync(entry.Url);
+                            summary = await llmService.SummarizeAsync(entry.Title, text);
+                        }
 
-                        Console.WriteLine($"## {entry.Title}");
+                        Console.WriteLine($"## [{entry.Title}]({entry.Url})");
                         if (entry.Published.HasValue)
                             Console.WriteLine($"*{entry.Published.Value:yyyy-MM-dd HH:mm}*");
                         Console.WriteLine();
@@ -82,18 +91,28 @@ public static class FetchCommand
                         AnsiConsole.MarkupLine("\n  [bold yellow]{0}[/]", Markup.Escape(entry.Title));
                         if (entry.Published.HasValue)
                             AnsiConsole.MarkupLine("  [grey]{0}[/]", entry.Published.Value.ToString("yyyy-MM-dd HH:mm"));
+                        AnsiConsole.MarkupLine("  [grey]{0}[/]", entry.Url);
 
                         await AnsiConsole.Status()
                             .Spinner(Spinner.Known.Dots)
-                            .StartAsync("Fetching article...", async ctx =>
+                            .StartAsync(isImage ? "Downloading image..." : "Fetching article...", async ctx =>
                             {
-                                var text = await articleService.FetchTextAsync(entry.Url);
-                                ctx.Status("Summarizing...");
-                                summary = await llmService.SummarizeAsync(entry.Title, text);
+                                if (isImage)
+                                {
+                                    var (imageBytes, imageMediaType) = await ImageService.FetchAndPrepareAsync(entry.Url);
+                                    ctx.Status("Summarizing...");
+                                    summary = await llmService.SummarizeAsync(entry.Title, string.Empty, imageBytes, imageMediaType);
+                                }
+                                else
+                                {
+                                    var text = await articleService.FetchTextAsync(entry.Url);
+                                    ctx.Status("Summarizing...");
+                                    summary = await llmService.SummarizeAsync(entry.Title, text);
+                                }
                             });
 
                         AnsiConsole.Write(new Panel(Markup.Escape(summary))
-                            .Header("[green]Summary[/]")
+                            .Header(isImage ? "[green]Summary (image)[/]" : "[green]Summary[/]")
                             .Expand()
                             .BorderColor(Color.Grey));
                     }
